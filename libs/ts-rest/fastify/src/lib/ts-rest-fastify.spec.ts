@@ -3,6 +3,7 @@ import { initServer, RequestValidationErrorSchema } from './ts-rest-fastify';
 import { z } from 'zod';
 import fastify from 'fastify';
 import * as supertest from 'supertest';
+import multipart from '@fastify/multipart';
 
 declare module 'fastify' {
   interface FastifyReply {
@@ -64,6 +65,24 @@ const contract = c.router({
       }),
     },
   },
+  multipart: {
+    method: 'POST',
+    path: '/upload',
+    contentType: 'multipart/form-data',
+    body: c.type<{
+      files: File[];
+      file: File;
+      foo: string;
+    }>(),
+    responses: {
+      200: c.type<{
+        fileFields: string[];
+        body: {
+          foo: string;
+        };
+      }>(),
+    },
+  },
 });
 
 jest.setTimeout(30000);
@@ -73,9 +92,8 @@ describe('ts-rest-fastify', () => {
 
   const router = s.router(contract, {
     test: async ({ request, reply }) => {
-      expect(request.routeConfig.tsRestRoute).toEqual(contract.test);
       expect(request.routeOptions.config.tsRestRoute).toEqual(contract.test);
-      expect(reply.context.config.tsRestRoute).toEqual(contract.test);
+      expect(reply.routeOptions.config.tsRestRoute).toEqual(contract.test);
 
       return {
         status: 200,
@@ -112,6 +130,21 @@ describe('ts-rest-fastify', () => {
         body: {
           foo: 'bar',
           bar: 'foo', // this is extra
+        },
+      };
+    },
+    multipart: async ({ request, body }) => {
+      const files = await request.files();
+
+      const fileNamesArray: string[] = [];
+      for await (const file of files) {
+        fileNamesArray.push(file.filename);
+      }
+      return {
+        status: 200,
+        body: {
+          fileFields: fileNamesArray,
+          body: { foo: body.foo },
         },
       };
     },
@@ -333,6 +366,36 @@ describe('ts-rest-fastify', () => {
     expect(response.body).toEqual({ foo: 'bar', bar: 'foo' });
   });
 
+  it('should handle multipart/form-data', async () => {
+    const app = fastify({ logger: false });
+    app.register(multipart);
+
+    await supertest(app.server)
+      .post('/upload')
+      .attach('files', Buffer.from(''), {
+        filename: 'filename-1',
+        contentType: 'text/plain',
+      })
+      .attach('files', Buffer.from(''), {
+        filename: 'filename-2',
+        contentType: 'text/plain',
+      })
+      .attach('file', Buffer.from(''), {
+        filename: 'filename-3',
+        contentType: 'text/plain',
+      })
+      .field('foo', 'bar')
+      .expect((res) => {
+        expect(res.status).toEqual(200);
+        expect(res.body).toEqual({
+          fileFields: ['files', 'files', 'file'],
+          body: {
+            foo: 'bar',
+          },
+        });
+      });
+  });
+
   it('prefixed contract should work with fastify', async () => {
     const postsContractNested = c.router(
       {
@@ -533,6 +596,9 @@ describe('ts-rest-fastify', () => {
         throw new Error('not implemented');
       },
       returnsTheWrongData: async () => {
+        throw new Error('not implemented');
+      },
+      multipart: async () => {
         throw new Error('not implemented');
       },
     });
