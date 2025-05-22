@@ -1,5 +1,15 @@
 # @ts-rest/open-api
 
+## 3.52.1
+
+## 3.52.0
+
+### Minor Changes
+
+- 83416b3: Support automatic reusable "Components" in OpenAPI schemas, reduces final size of schema, uses the "Title" property from @anatine/zod-openapi
+
+## 3.51.1
+
 ## 3.51.0
 
 ## 3.50.0
